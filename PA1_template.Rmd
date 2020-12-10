@@ -1,25 +1,182 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
 output: 
-  html_document:
-    keep_md: true
+  html_document: 
+    keep_md: yes
 ---
 
 
 ## Loading and preprocessing the data
 
+```{r Loading, echo=TRUE}
+ActivityData = read.csv("activity.csv")
+# A call to preview the structure of the data
+str(ActivityData)
+```
+
+
+```{r Viewing_the_raw_dataset, echo=TRUE}
+head(ActivityData)
+```
+
+
+The following code chunk is wriiten so as to format the variable *interval* to appear as a time measure (e.g, 105 should appear as 1:05). Parsing *interval* as a time value using package *lubridate* would have been the easy thing to do; however, the raw format of the *interval* values does not fit into the orders recognized by *lubridate*. Hence, the formatting had to be done by programatically inserting ':' at the appropriate position in the string and padding with zeros where neccessary. Once in the desired format, variable *interval* is made a factor, so the dataframe can be grouped by *interval*.
+
+```{r Preprocessing, echo = TRUE}
+ActivityData$interval = sapply(ActivityData$interval, function(x) 
+  if (nchar(as.character(x))==1){
+  paste0('00:0',x)
+  }
+  else{
+    if (nchar(as.character(x))==2){
+  paste0('00:',x)
+    }
+    else{
+      if (nchar(as.character(x))==3){
+     gsub('^(.{1})(.+)$', '0\\1:\\2', x) 
+      }
+      else{
+     gsub('^(.{2})(.+)$', '\\1:\\2', x) 
+      }
+    }
+  }
+)
+ActivityData$interval = as.factor(ActivityData$interval)
+# A call to preview the structure of the processed data
+str(ActivityData)
+```
+
+```{r Viewing_the_proccessed_dataset, echo=TRUE}
+head(ActivityData)
+```
 
 
 ## What is mean total number of steps taken per day?
 
 
+```{r Total_steps_per_day, echo = TRUE}
+library(dplyr)
+TotalStepsPerDay = ActivityData %>% group_by(date) %>% summarise(TotalSteps =sum(steps, na.rm = TRUE))
+head(TotalStepsPerDay)
+```
+
+```{r Total_steps_histogram, echo = TRUE}
+library(ggplot2)
+ggplot(TotalStepsPerDay, aes(x= TotalSteps))+
+    geom_histogram(bins = 20,color = "blue", fill = "lightgreen")+
+    labs(x = "Daily Total Number of Steps", y = "Frequency")
+```
+
+
+
+```{r Mean_steps_per_day, echo = TRUE}
+MeanDailyStep = mean(TotalStepsPerDay$TotalSteps)
+MeanDailyStep
+```
+
+The mean total number of steps taken per day is **`r round(MeanDailyStep)`**.
+
+```{r Median_steps_per_day, echo = TRUE}
+MedianDailyStep = median(TotalStepsPerDay$TotalSteps)
+MedianDailyStep
+```
+
+The median total number of steps taken per day is **`r MedianDailyStep`**.
+
 
 ## What is the average daily activity pattern?
 
+```{r Average_daily_pattern, echo=TRUE}
+AverageStepsPerInterval = ActivityData %>% group_by(interval) %>% summarise(AverageSteps =mean(steps, na.rm = TRUE))
+head(AverageStepsPerInterval)
+```
 
+```{r Average_daily_pattern_plot, echo=TRUE}
+ggplot(data = AverageStepsPerInterval, aes(x = interval, y = AverageSteps))+
+  labs(x = "Interval Identifier", y = "Average Steps")+
+  scale_x_discrete(breaks = AverageStepsPerInterval$interval[seq(from = 1, to = 288,by = 24)])+
+  geom_line(colour = "blue", aes(group = 12))
+```
+
+
+```{r Maximum_Step_Interval, echo=TRUE}
+MaximumStepInterval = AverageStepsPerInterval$interval[AverageStepsPerInterval$AverageSteps==max(AverageStepsPerInterval$AverageSteps)]
+MaximumStepInterval
+```
+
+The 5-minute interval that contains the maximum number of steps, on average across all the days, is **`r MaximumStepInterval`**.
 
 ## Imputing missing values
 
+```{r Number_of_Missing_Values, echo=TRUE}
+NumberofMissingValues = sum(is.na(ActivityData$steps))
+NumberofMissingValues
+```
+
+The total number of missing values in the dataset is **`r NumberofMissingValues`**.
+
+The following code chunk implements a simple scheme to create a new dataset wherein each missing value in the original dataset is replaced with mean number of steps for the correspondig 5-minute interval.
+
+```{r Creating_a_new_dataset, echo=TRUE}
+ActivityData_new = ActivityData
+ActivityData_new$steps[is.na(ActivityData_new$steps)] = unlist(sapply(ActivityData_new$interval[is.na(ActivityData_new$steps)], function(a,b)  ceiling(b[b$interval==a,2]), AverageStepsPerInterval))
+head(ActivityData_new)
+```
+
+
+```{r Total_steps_per_day(Updated), echo=TRUE}
+library(dplyr)
+TotalStepsPerDay_new = ActivityData_new %>% group_by(date) %>% summarise(TotalSteps =sum(steps, na.rm = TRUE))
+head(TotalStepsPerDay_new)
+```
+
+```{r Total_steps_histogram(Updated), echo=TRUE}
+library(ggplot2)
+ggplot(TotalStepsPerDay_new, aes(x= TotalSteps))+
+    geom_histogram(bins = 20,color = "blue", fill = "lightgreen")+
+    labs(x = "Daily Total Number of Steps", y = "Frequency")
+```
+
+
+
+```{r Mean_step_per_day(Updated), echo=TRUE}
+MeanDailyStep_new = mean(TotalStepsPerDay_new$TotalSteps)
+MeanDailyStep_new
+```
+
+For the new dataset, the mean total number of steps taken per day is **`r round(MeanDailyStep_new)`**.
+
+```{r Median_step_per_day(Updated), echo=TRUE}
+MedianDailyStep_new = median(TotalStepsPerDay_new$TotalSteps)
+MedianDailyStep_new
+```
+
+For the new dataset, the median total number of steps taken per day is **`r MedianDailyStep_new`**.
+
+Consequent upon updating the dataset by filling in the missing values, the estimated values of mean and median daily total steps for the updated dataset differs from those obtained from the original dataset. However, the impact of the updating is more significant on the mean (difference of **`r abs(round(MeanDailyStep_new - MeanDailyStep))`**) than it is on the median (difference of **`r MedianDailyStep_new - MedianDailyStep `**).
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r Designating_dates_as_weekdays_or_weekends, echo=TRUE}
+library(dplyr)
+ActivityData_new = ActivityData_new %>% mutate(DayStatus = factor((weekdays(as.POSIXct(date)) %in% c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')),levels=c(TRUE, FALSE), labels=c('Weekday', 'Weekend')))
+head(ActivityData_new)
+```
+
+
+```{r Average_daily_pattern_on_Weekday_Weekend_basis, echo=TRUE}
+AverageStepsPerInterval_status = ActivityData_new %>% group_by(DayStatus, interval) %>% summarise(AverageSteps =mean(steps))
+head(AverageStepsPerInterval_status)
+tail(AverageStepsPerInterval_status)
+```
+
+```{r Average_daily_pattern_plot_on_Weekday_Weekend_basis, echo=TRUE}
+ggplot(data = AverageStepsPerInterval_status, aes(x = interval, y = AverageSteps))+
+  labs(x = "Interval Identifier", y = "Average Steps")+
+  scale_x_discrete(breaks = AverageStepsPerInterval_status$interval[seq(from = 1, to = 288,by = 24)])+
+  geom_line(colour = "blue", aes(group = DayStatus))+
+  facet_wrap(~ DayStatus, nrow = 2)
+```
+
+
